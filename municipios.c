@@ -454,21 +454,32 @@ FILE *abrir_arqbin(void) {
   return f;
 }
 
+/* a posicao no vetor e o numero da opcao */
+static const char *OPCOES[] = {
+    "sair",
+    "regravar " ARQ_BIN " a partir de " ARQ_TEXTO,
+    "buscar no arquivo (pesquisa binaria em disco)",
+    "buscar na memoria (pesquisa binaria em vetor)",
+    "comparar arquivo x memoria",
+    "listar faixa de registros",
+};
+#define N_OPCOES (int)(sizeof(OPCOES) / sizeof(OPCOES[0]))
+
 void menu(void) {
-  printf("\n1 - regravar %s a partir de %s\n", ARQ_BIN, ARQ_TEXTO);
-  printf("2 - buscar no arquivo (pesquisa binaria em disco)\n");
-  printf("3 - buscar na memoria (pesquisa binaria em vetor)\n");
-  printf("4 - comparar arquivo x memoria\n");
-  printf("5 - listar faixa de registros\n");
-  printf("0 - sair\n");
+  printf("\n");
+  for (int i = 1; i < N_OPCOES; i++) printf("%d - %s\n", i, OPCOES[i]);
+  printf("0 - %s\n", OPCOES[0]);
 }
 
 int ler_opcao(void) {
   char linha[32];
+  char *fim;
+  long opcao;
 
   if (!ler_texto("opcao: ", linha, sizeof(linha))) return 0;
-  if (linha[1] != '\0' || linha[0] < '0' || linha[0] > '5') return -1;
-  return linha[0] - '0';
+  opcao = strtol(linha, &fim, 10);
+  if (fim == linha || *fim != '\0' || opcao < 0 || opcao >= N_OPCOES) return -1;
+  return (int)opcao;
 }
 
 int main(void) {
