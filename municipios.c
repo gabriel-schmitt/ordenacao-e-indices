@@ -227,7 +227,29 @@ int criar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
 }
 
 int gravar_indice_primario(const IndicePrimario *ind) {
-  return 0;
+  if (ind == NULL) return 0;
+
+  FILE *idx = fopen(ARQ_IDX, "wb");
+  if (idx == NULL) {
+    perror(ARQ_IDX);
+    return 0;
+  }
+
+  if (fwrite(&ind->k, sizeof(ind->k), 1, idx) != 1 ||
+      fwrite(&ind->total, sizeof(ind->total), 1, idx) != 1 ||
+      fwrite(&ind->n, sizeof(ind->n), 1, idx) != 1 ||
+      (int)fwrite(ind->entradas, sizeof(ind->entradas[0]), (size_t)ind->n, idx) != ind->n) {
+    perror(ARQ_IDX);
+    fclose(idx);
+    return 0;
+  }
+
+  if (fclose(idx) != 0) {
+    perror(ARQ_IDX);
+    return 0;
+  }
+
+  return 1;
 }
 
 int carregar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
