@@ -56,6 +56,8 @@ inteiro.
 | 3 | pesquisa binária **em memória** |
 | 4 | comparativo arquivo × memória |
 | 5 | listar uma faixa de registros |
+| 6 | pesquisa pelo índice primário (ver `RESPOSTAS.md`) |
+| 7 | imprimir o índice primário |
 
 As opções 2 e 3 imprimem cada registro comparado, o total de comparações e o
 tempo. A opção 3 carrega os 5.571 registros de uma vez na primeira chamada.

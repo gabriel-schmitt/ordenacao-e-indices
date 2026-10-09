@@ -5,4 +5,4 @@ municipios: municipios.c
 	$(CC) $(CFLAGS) -o municipios municipios.c
 
 clean:
-	rm -f municipios municipios.bin
+	rm -f municipios municipios.bin municipios.idx

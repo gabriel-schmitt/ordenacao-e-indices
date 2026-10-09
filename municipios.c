@@ -17,7 +17,7 @@
 #define MAX_PASSOS 64
 #define REPETICOES 10000
 
-#define TAM_K 4
+#define TAM_K 46
 
 typedef struct {
   char chave[TAM_CHAVE];
@@ -227,8 +227,6 @@ int criar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
 }
 
 int gravar_indice_primario(const IndicePrimario *ind) {
-  if (ind == NULL) return 0;
-
   FILE *idx = fopen(ARQ_IDX, "wb");
   if (idx == NULL) {
     perror(ARQ_IDX);
@@ -253,14 +251,86 @@ int gravar_indice_primario(const IndicePrimario *ind) {
 }
 
 int carregar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
-  return 0;
+  FILE *idx = fopen(ARQ_IDX, "rb");
+  int ok = 0;
+
+  ind->entradas = NULL;
+  if (idx != NULL) {
+    ok = fread(&ind->k, sizeof(ind->k), 1, idx) == 1 &&
+         fread(&ind->total, sizeof(ind->total), 1, idx) == 1 &&
+         fread(&ind->n, sizeof(ind->n), 1, idx) == 1 &&
+         ind->k == k && ind->total == total && ind->n == (total + k - 1) / k;
+    if (ok) {
+      ind->entradas = malloc((size_t)ind->n * sizeof(EntradaIndicePrimario));
+      ok = ind->entradas != NULL &&
+           (int)fread(ind->entradas, sizeof(ind->entradas[0]), (size_t)ind->n, idx) == ind->n;
+    }
+    fclose(idx);
+  }
+  if (ok) return 1;
+
+  free(ind->entradas);
+  ind->entradas = NULL;
+  printf("%s ausente ou desatualizado, recriando\n", ARQ_IDX);
+  if (!criar_indice_primario(f, total, k, ind)) return 0;
+  gravar_indice_primario(ind);
+  return 1;
 }
 
 int pesquisar_indice_primario(FILE *f, const IndicePrimario *ind, const char *chave) {
-  return -1;
+  int lo = 0, hi = ind->n - 1, i = 0;
+
+  /* ultima entrada com chave < alvo, e nao <=: um grupo de homonimos pode
+     comecar no fim do bloco anterior a entrada que tem a chave igual */
+  while (lo <= hi) {
+    int mid = lo + (hi - lo) / 2;
+
+    if (strcmp(ind->entradas[mid].chave, chave) < 0) {
+      i = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  int inicio = ind->entradas[i].reg;
+  int qtd = ind->total - inicio < ind->k ? ind->total - inicio : ind->k;
+  Municipio *bloco = malloc((size_t)qtd * sizeof(Municipio));
+  int pos = -1;
+
+  if (bloco == NULL) return -1;
+  if (fseek(f, (long)inicio * (long)sizeof(Municipio), SEEK_SET) == 0 &&
+      (int)fread(bloco, sizeof(Municipio), (size_t)qtd, f) == qtd) {
+    for (int j = 0; j < qtd; j++) {
+      int cmp = strcmp(bloco[j].chave, chave);
+
+      if (cmp == 0) pos = inicio + j;
+      if (cmp >= 0) break;
+    }
+  }
+  free(bloco);
+
+  if (pos < 0 && i + 1 < ind->n && strcmp(ind->entradas[i + 1].chave, chave) == 0)
+    pos = ind->entradas[i + 1].reg;
+  return pos;
 }
 
 void imprimir_indice(const IndicePrimario *ind) {
+  int i;
+
+  printf("\n  entrada    reg  chave                                   registros\n");
+  for (i = 0; i < ind->n; i++) {
+    int qtd = ind->total - ind->entradas[i].reg;
+
+    if (qtd > ind->k) qtd = ind->k;
+    printf("  %7d %6d  ", i, ind->entradas[i].reg);
+    imprimir_campo(ind->entradas[i].chave, 40);
+    printf("%d\n", qtd);
+  }
+  printf("\n  %d entradas de %zu bytes para %d registros\n", ind->n,
+         sizeof(EntradaIndicePrimario), ind->total);
+  printf("  cada intervalo tem %d registros, menos o ultimo, que tem %d\n", ind->k,
+         ind->total - ind->entradas[ind->n - 1].reg);
 }
 
 void registrar_passo(Busca *b, int pos, const Municipio *m, int cmp) {
@@ -410,6 +480,20 @@ void buscar_no_arquivo(FILE *f, int total) {
   if (b.encontrado) listar_homonimos(f, total, b.pos, chave);
 }
 
+void buscar_pelo_indice(FILE *f, int total, const IndicePrimario *ind) {
+  char chave[TAM_CHAVE];
+  int pos;
+
+  if (!ler_chave(chave)) return;
+  pos = pesquisar_indice_primario(f, ind, chave);
+  if (pos < 0) {
+    printf("\n  NAO ENCONTRADO\n");
+    return;
+  }
+  printf("\n  ENCONTRADO no registro %d, intervalo da entrada %d\n", pos, pos / ind->k);
+  listar_homonimos(f, total, pos, chave);
+}
+
 void buscar_na_memoria(const Municipio *v, int total) {
   char chave[TAM_CHAVE];
   Busca b;
@@ -539,6 +623,8 @@ static const char *OPCOES[] = {
     "buscar na memoria (pesquisa binaria em vetor)",
     "comparar arquivo x memoria",
     "listar faixa de registros",
+    "buscar pelo indice primario",
+    "imprimir indice primario",
 };
 #define N_OPCOES (int)(sizeof(OPCOES) / sizeof(OPCOES[0]))
 
@@ -562,6 +648,7 @@ int ler_opcao(void) {
 int main(void) {
   FILE *bin = abrir_arqbin();
   Municipio *v = NULL;
+  IndicePrimario ind = {0};
   int total, opcao;
 
   if (bin == NULL) return 1;
@@ -569,6 +656,12 @@ int main(void) {
   total = total_registros(bin);
   printf("%d municipios em %s, registros de %zu bytes (%ld bytes no total)\n",
          total, ARQ_BIN, sizeof(Municipio), (long)total * (long)sizeof(Municipio));
+
+  if (!carregar_indice_primario(bin, total, TAM_K, &ind)) {
+    printf("  memoria insuficiente para o indice\n");
+    return 1;
+  }
+  printf("indice primario em %s: %d entradas, uma a cada %d registros\n", ARQ_IDX, ind.n, ind.k);
 
   while (menu(), (opcao = ler_opcao()) != 0) {
     switch (opcao) {
@@ -581,6 +674,10 @@ int main(void) {
         if (bin == NULL) return 1;
         total = total_registros(bin);
         printf("  %d municipios regravados\n", total);
+        free(ind.entradas);
+        if (!criar_indice_primario(bin, total, TAM_K, &ind)) return 1;
+        gravar_indice_primario(&ind);
+        printf("  indice primario recriado: %d entradas\n", ind.n);
         break;
       case 2:
         buscar_no_arquivo(bin, total);
@@ -602,11 +699,18 @@ int main(void) {
       case 5:
         listar_faixa(bin, total);
         break;
+      case 6:
+        buscar_pelo_indice(bin, total, &ind);
+        break;
+      case 7:
+        imprimir_indice(&ind);
+        break;
       default:
         printf("  opcao invalida\n");
     }
   }
 
+  free(ind.entradas);
   free(v);
   fclose(bin);
   return 0;
