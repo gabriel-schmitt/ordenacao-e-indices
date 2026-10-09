@@ -6,6 +6,7 @@
 
 #define ARQ_TEXTO "municipios.txt"
 #define ARQ_BIN "municipios.bin"
+#define ARQ_IDX "municipios.idx"
 
 /* mesmo tamanho do nome de proposito: tirar acento so troca 2 bytes por 1,
    entao a chave nunca estoura o campo e nenhuma busca falha por truncamento */
@@ -198,6 +199,46 @@ Municipio *carregar_memoria(FILE *f, int total) {
     return NULL;
   }
   return v;
+}
+
+int criar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
+  ind->total = total;
+  ind->k = k;
+  ind->n = (total + k -1) / k;
+
+  ind->entradas = malloc((size_t)ind->n * sizeof(EntradaIndicePrimario));
+  if (ind->entradas == NULL) return 0;
+
+  int i;
+  for (i = 0; i < ind->n; i++) {
+    Municipio reg;
+    if (!ler_registro(f, i * k, &reg)) {
+      free(ind->entradas);
+      ind->entradas = NULL;
+      return 0;
+    }
+    EntradaIndicePrimario ent;
+    memcpy(ent.chave, reg.chave, TAM_CHAVE);
+    ent.reg = i * k;
+    ind->entradas[i] = ent;
+  }
+
+  return 1;
+}
+
+int gravar_indice_primario(const IndicePrimario *ind) {
+  return 0;
+}
+
+int carregar_indice_primario(FILE *f, int total, int k, IndicePrimario *ind) {
+  return 0;
+}
+
+int pesquisar_indice_primario(FILE *f, const IndicePrimario *ind, const char *chave) {
+  return -1;
+}
+
+void imprimir_indice(const IndicePrimario *ind) {
 }
 
 void registrar_passo(Busca *b, int pos, const Municipio *m, int cmp) {
