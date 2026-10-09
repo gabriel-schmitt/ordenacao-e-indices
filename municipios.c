@@ -16,6 +16,8 @@
 #define MAX_PASSOS 64
 #define REPETICOES 10000
 
+#define TAM_K 4
+
 typedef struct {
   char chave[TAM_CHAVE];
   char nome[TAM_NOME];
@@ -36,6 +38,18 @@ typedef struct {
   int passos;
   Passo trilha[MAX_PASSOS];
 } Busca;
+
+typedef struct {
+  char chave[TAM_CHAVE];
+  int reg;
+} EntradaIndicePrimario;
+
+typedef struct {
+  int k; // tamanho do intervalo apontado por cada entrada de indice
+  int total; // total de itens ordenados no arquivo
+  int n;
+  EntradaIndicePrimario *entradas;
+} IndicePrimario;
 
 /* U+00C0..U+00FF em UTF-8 sao 0xC3 seguido de um byte 0x80..0xBF, que indexa
    esta tabela direto */
